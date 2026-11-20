@@ -19,7 +19,8 @@ changes, push a branch, or change GitHub settings automatically.
    Surface authentication, permission, and network failures without tagging.
 3. Fetch `origin/main` with `git fetch --no-tags origin refs/heads/main` and
    inspect `git show FETCH_HEAD:.github/workflows/react.yml`. Verify that this
-   remote workflow triggers on `deploy-*` tag pushes, deploys to Pages, and
+   remote workflow supports `workflow_dispatch` with no push or pull-request
+   triggers, deploys `deploy-*` tag refs to Pages, and
    publishes a release with generated notes only after deployment succeeds.
    If not, stop and ask the user to commit and push these command/workflow files
    to `main` first. Explain that this deploys the latest remote `origin/main`,
@@ -27,7 +28,7 @@ changes, push a branch, or change GitHub settings automatically.
    Run `bash commands/deploy.sh` exactly once.
    If it fails, stop and report the error; do not create another tag or force-push.
 4. Use the tag printed by the script to find its Actions run:
-   `gh run list --workflow react.yml --branch TAG --event push --limit 1 --json databaseId,url,status,conclusion`.
+   `gh run list --workflow react.yml --branch TAG --event workflow_dispatch --limit 1 --json databaseId,url,status,conclusion`.
    If the run has not appeared, retry this lookup at most five times, waiting
    three seconds between lookups. Never rerun the tagging script to find a run.
 5. When a run is found, watch it with `gh run watch RUN_ID --exit-status`.

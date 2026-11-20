@@ -8,6 +8,16 @@ fi
 
 cd "$(git rev-parse --show-toplevel)"
 
+if ! command -v gh >/dev/null; then
+  echo "GitHub CLI (gh) is required to start the deployment workflow." >&2
+  exit 1
+fi
+
+if ! gh auth status; then
+  echo "Authenticate GitHub CLI with gh auth login before deploying." >&2
+  exit 1
+fi
+
 if ! git fetch --no-tags origin refs/heads/main; then
   echo "Cannot fetch origin/main. Check the remote, access, and whether main has been pushed." >&2
   exit 1
@@ -30,3 +40,11 @@ if ! git push origin "refs/tags/$tag:refs/tags/$tag"; then
 fi
 
 printf 'Created and pushed tag: %s\nSource commit: %s\n' "$tag" "$commit"
+
+if ! gh workflow run react.yml --ref "$tag"; then
+  echo "Tag $tag was pushed, but workflow dispatch failed. No deployment is confirmed." >&2
+  echo "Retry the dispatch with: gh workflow run react.yml --ref $tag" >&2
+  exit 1
+fi
+
+printf 'Dispatched workflow: react.yml\n'

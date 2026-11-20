@@ -24,8 +24,9 @@ npm run build
 
 ## GitHub Actions
 
-The [React workflow](./.github/workflows/react.yml) runs on branch pushes, pull
-requests, manual dispatch, and `deploy-*` tag pushes. It prints `hellow kapil`
+The [React workflow](./.github/workflows/react.yml) runs only by explicit
+manual dispatch. Branch pushes, tag pushes, and pull requests do not start it.
+It prints `hellow kapil`
 in the job log, tests the greeting and deployment command, builds the app,
 and uploads the production files as the `hello-kapil-dist` artifact.
 Only `deploy-*` tags publish to GitHub Pages. Tag builds use the Pages base
@@ -36,7 +37,7 @@ merged pull requests and contributors since the previous release; the first
 release has no previous-release baseline. Failed deployments do not publish
 a release. Only the release job has repository `contents: write` permission.
 
-Commit and push these files to GitHub to trigger the workflow.
+Commit and push these files to `main`, then invoke `/deploy` to start the workflow.
 
 ## `/deploy` command
 
@@ -58,8 +59,9 @@ Before the first deployment:
 
 The command fetches the latest remote `origin/main`, creates an annotated tag
 such as `deploy-20261120-104600-0123456789ab` (UTC timestamp plus commit hash),
-and pushes only that tag. GitHub Actions then tests, builds, and deploys that
-tagged commit. Local branches and uncommitted changes are not deployed or
+and pushes only that tag. It then explicitly starts the workflow with
+`gh workflow run react.yml --ref TAG`. GitHub Actions tests, builds, and deploys
+that tagged commit. Local branches and uncommitted changes are not deployed or
 automatically committed. Copilot watches the Actions run and reports its result,
 the deployed site URL, and the GitHub release notes URL.
 GitHub's environment protection rules may require approval before publishing.
@@ -70,8 +72,11 @@ You can also trigger the same pipeline from the terminal:
 bash commands/deploy.sh
 ```
 
-Unlike the Chat command, the script only pushes the tag; it does not watch CI.
+Unlike the Chat command, the script pushes the tag and dispatches the workflow
+but does not watch CI.
 If pushing fails, it reports the error and leaves the local tag for inspection.
+If dispatch fails after the tag was pushed, it reports the error and prints
+the dispatch command to retry for that same tag; do not create another tag.
 Never force-push or delete a remote deployment tag to retry a deployment.
 
 ### Add more commands
@@ -88,4 +93,5 @@ Test the tagging command without pushing anything to GitHub:
 node --test commands/deploy.test.mjs
 ```
 
-These tests create and clean up isolated temporary Git repositories.
+These tests create and clean up isolated temporary Git repositories and mock
+GitHub CLI; they do not call GitHub or start a real deployment.
