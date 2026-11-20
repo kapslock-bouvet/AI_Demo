@@ -1,14 +1,5 @@
 name: Build and deploy React app
 
-on:
-  push:
-    branches:
-      - '**'
-    tags:
-      - 'deploy-*'
-  pull_request:
-  workflow_dispatch:
-
 permissions:
   contents: read
 
