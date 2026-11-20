@@ -1,13 +1,14 @@
 ---
 name: deploy
-description: Tag remote main and start GitHub Actions to test, build, deploy this React app to GitHub Pages, and publish a GitHub release with generated notes. Use when the user invokes /deploy.
+description: Update Prod from remote main, tag Prod, and manually start GitHub Actions to test, build, deploy this React app to GitHub Pages, and publish release notes. Use when the user invokes /deploy.
 disable-model-invocation: true
 ---
 
 # Deploy
 
-Run this command only when explicitly invoked by the user. Do not commit local
-changes, push a branch, or change GitHub settings automatically.
+Run this command only when explicitly invoked by the user. Do not commit or stash
+local changes, push branches other than `Prod`, or change GitHub settings
+automatically. Pushing `Prod` is part of this command.
 
 1. Work from the repository root. Read [the deployment script](../../../commands/deploy.sh)
    and [the workflow](../../workflows/react.yml).
@@ -24,8 +25,13 @@ changes, push a branch, or change GitHub settings automatically.
    `3.0`, deploys those tag refs to Pages, and
    publishes a release with generated notes only after deployment succeeds.
    If not, stop and ask the user to commit and push these command/workflow files
-   to `main` first. Explain that this deploys the latest remote `origin/main`,
-   not the current branch or uncommitted changes. The script starts at `1.0`
+   to `main` first. Explain that this requires a clean worktree, switches to
+   `Prod`, creates or fast-forwards it to the latest remote `origin/main`,
+   pushes `Prod`, and creates the release tag from `Prod`. The command leaves
+   the checkout on `Prod`. It does not include commits from other local branches
+   or overwrite production history. If local or remote `Prod` has commits outside
+   remote `main`, stop and report the divergence; never reset or force-push.
+   The script starts at `1.0`
    and increments the highest matching tag on `origin` by one major version.
    It ignores timestamp tags and other tag formats. Existing tags are never
    renamed or overwritten. The `github-pages` environment must allow `*.0` tags.
@@ -36,8 +42,8 @@ changes, push a branch, or change GitHub settings automatically.
    If the run has not appeared, retry this lookup at most five times, waiting
    three seconds between lookups. Never rerun the tagging script to find a run.
 5. When a run is found, watch it with `gh run watch RUN_ID --exit-status`.
-   Report the tag, source commit, Actions URL, and result. Only claim successful
-   deployment after the entire run succeeds; then retrieve the site URL using
+   Report the tag, source branch `Prod`, source commit, Actions URL, and result.
+   Only claim successful deployment after the entire run succeeds; then retrieve the site URL using
    `gh api repos/OWNER/REPO/pages --jq .html_url`.
    Retrieve and report the release notes URL with
    `gh release view TAG --json url --jq .url`.

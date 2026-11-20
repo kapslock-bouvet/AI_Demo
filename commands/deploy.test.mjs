@@ -49,6 +49,9 @@ fi
 if [ "$1" = workflow ] && [ "$2" = run ]; then
   printf '%s\\n' "$@" > "$GH_TEST_CALLS"
   git ls-remote --exit-code --tags origin "refs/tags/$5" >/dev/null
+  tag_commit="$(git rev-parse "$5^{commit}")"
+  prod_commit="$(git ls-remote --heads origin refs/heads/Prod | cut -f1)"
+  [ "$tag_commit" = "$prod_commit" ]
   exit "\${GH_TEST_DISPATCH_STATUS:-0}"
 fi
 echo "Unexpected gh command" >&2
@@ -69,14 +72,13 @@ exit 1
   return { git, runDeploy, calls, work };
 }
 
-test('tags remote main, then dispatches that tag without deploying local changes', (t) => {
+test('checks out Prod from remote main, pushes it, then tags and dispatches', (t) => {
   const { work, git, runDeploy, calls } = repository(t);
   const main = git('rev-parse', 'HEAD');
   git('checkout', '-b', 'feature');
   writeFileSync(path.join(work, 'app.txt'), 'feature\n');
   git('commit', '-am', 'Local feature');
   const feature = git('rev-parse', 'HEAD');
-  writeFileSync(path.join(work, 'app.txt'), 'uncommitted\n');
 
   const result = runDeploy();
   assert.equal(result.status, 0, result.stderr);
@@ -86,13 +88,78 @@ test('tags remote main, then dispatches that tag without deploying local changes
   assert.equal(git('cat-file', '-t', `refs/tags/${tag}`), 'tag');
   assert.equal(git('rev-parse', `${tag}^{commit}`), main);
   assert.match(git('ls-remote', 'origin', `refs/tags/${tag}^{}`), new RegExp(`^${main}\\s`));
-  assert.equal(git('rev-parse', 'HEAD'), feature);
-  assert.equal(git('branch', '--show-current'), 'feature');
-  assert.match(git('status', '--short'), /app\.txt/);
+  assert.equal(git('rev-parse', 'HEAD'), main);
+  assert.equal(git('rev-parse', 'feature'), feature);
+  assert.equal(git('branch', '--show-current'), 'Prod');
+  assert.equal(git('rev-parse', 'main'), main);
+  assert.equal(git('status', '--short'), '');
+  assert.match(git('ls-remote', '--heads', 'origin', 'refs/heads/Prod'), new RegExp(`^${main}\\s`));
   assert.deepEqual(readFileSync(calls, 'utf8').trim().split('\n'), [
     'workflow', 'run', 'react.yml', '--ref', tag,
   ]);
   assert.match(output, /Dispatched workflow: react\.yml/);
+  assert.match(output, /Source branch: Prod/);
+});
+
+test('fast-forwards existing local and remote Prod to the latest remote main', (t) => {
+  const { work, git, runDeploy } = repository(t);
+  git('branch', 'Prod');
+  git('push', 'origin', 'Prod');
+  writeFileSync(path.join(work, 'app.txt'), 'updated main\n');
+  git('commit', '-am', 'Update main');
+  const main = git('rev-parse', 'HEAD');
+  git('push', 'origin', 'main');
+
+  const result = runDeploy();
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(git('rev-parse', 'Prod'), main);
+  assert.equal(git('rev-parse', '1.0^{commit}'), main);
+  assert.match(git('ls-remote', '--heads', 'origin', 'refs/heads/Prod'), new RegExp(`^${main}\\s`));
+});
+
+for (const remote of [false, true]) {
+  test(`stops before switching or tagging when ${remote ? 'remote' : 'local'} Prod diverges`, (t) => {
+    const { work, git, runDeploy } = repository(t);
+    git('switch', '-c', 'Prod');
+    writeFileSync(path.join(work, 'app.txt'), 'production-only commit\n');
+    git('commit', '-am', 'Change Prod only');
+    const prod = git('rev-parse', 'HEAD');
+    if (remote) {
+      git('push', 'origin', 'Prod');
+    }
+    git('switch', 'main');
+    if (remote) {
+      git('branch', '-m', 'Prod', 'remote-only-fixture');
+    }
+
+    const result = runDeploy();
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /Prod has commits outside origin\/main/);
+    assert.equal(git('branch', '--show-current'), 'main');
+    assert.equal(git('tag', '--list'), '');
+    assert.equal(git('ls-remote', '--tags', 'origin'), '');
+    if (remote) {
+      assert.match(git('ls-remote', '--heads', 'origin', 'refs/heads/Prod'), new RegExp(`^${prod}\\s`));
+    } else {
+      assert.equal(git('rev-parse', 'Prod'), prod);
+    }
+  });
+}
+
+test('stops without switching, tagging, or discarding worktree changes', (t) => {
+  const { work, git, runDeploy } = repository(t);
+  writeFileSync(path.join(work, 'app.txt'), 'staged change\n');
+  git('add', 'app.txt');
+  writeFileSync(path.join(work, 'untracked.txt'), 'untracked change\n');
+  const status = git('status', '--short');
+
+  const result = runDeploy();
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /A clean worktree is required/);
+  assert.equal(git('status', '--short'), status);
+  assert.equal(git('branch', '--show-current'), 'main');
+  assert.equal(git('tag', '--list'), '');
+  assert.equal(git('ls-remote', '--heads', 'origin', 'refs/heads/Prod'), '');
 });
 
 test('increments successive deployments as 1.0, 2.0, and 3.0', (t) => {

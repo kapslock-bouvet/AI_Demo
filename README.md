@@ -59,19 +59,31 @@ Before the first deployment:
 5. Start a fresh Copilot Chat session in this workspace, type `/`, and select
    `/deploy`.
 
-The command fetches the latest remote `origin/main` and reads the tags on
-`origin`. It creates `1.0` if there are no matching release tags, otherwise
+The command requires a clean worktree (including staged changes and untracked
+files). Commit or stash changes yourself before invoking it; the command does
+not commit or stash automatically.
+
+It fetches the latest remote `origin/main`, checks out `Prod` (creating it if
+needed), and fast-forwards `Prod` to that exact commit. It pushes `Prod` without
+force and creates the release tag from `Prod`. Both local and remote `Prod` must
+be ancestors of remote `main`; otherwise deployment stops before creating a tag.
+Resolve any production-only commits explicitly rather than overwriting them.
+The checkout remains on `Prod` after the command; switch back to `main` yourself
+when continuing development.
+
+The command reads the tags on `origin`. It creates `1.0` if there are no matching
+release tags, otherwise
 increments the highest numeric major version: `1.0`, `2.0`, `3.0`, and so on.
 It ignores timestamp tags and other formats, including `v1.0` and `1.1`.
 Existing tags are not renamed or overwritten. Every new tag reserves its number,
 even if that deployment later fails; retry dispatch for the same tag rather than
 creating a new tag when retrying a failed release.
 
-The command creates an annotated tag and pushes only that tag. It then explicitly
-starts the workflow with
+After pushing `Prod`, the command creates and pushes an annotated tag. It then
+explicitly starts the workflow with
 `gh workflow run react.yml --ref TAG`. GitHub Actions tests, builds, and deploys
-that tagged commit. Local branches and uncommitted changes are not deployed or
-automatically committed. Copilot watches the Actions run and reports its result,
+that tagged `Prod` commit. Commits on other local branches are not included.
+Copilot watches the Actions run and reports its result,
 the deployed site URL, and the GitHub release notes URL.
 GitHub's environment protection rules may require approval before publishing.
 
@@ -81,8 +93,8 @@ You can also trigger the same pipeline from the terminal:
 bash commands/deploy.sh
 ```
 
-Unlike the Chat command, the script pushes the tag and dispatches the workflow
-but does not watch CI.
+Unlike the Chat command, the script pushes `Prod` and the tag and dispatches the
+workflow but does not watch CI.
 If pushing fails, it reports the error and leaves the local tag for inspection.
 If dispatch fails after the tag was pushed, it reports the error and prints
 the dispatch command to retry for that same tag; do not create another tag.
