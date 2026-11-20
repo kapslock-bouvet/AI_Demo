@@ -5,6 +5,6 @@ import App from './App.jsx';
 
 test('renders the requested greeting', () => {
   expect(renderToStaticMarkup(<App />)).toBe(
-    '<main><h1>hellow kapil</h1></main>',
+    '<main><h1>hello kapil</h1></main>',
   );
 });
