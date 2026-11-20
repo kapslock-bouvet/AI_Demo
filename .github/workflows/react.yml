@@ -17,6 +17,12 @@ jobs:
         working-directory: Forme
     steps:
       - uses: actions/checkout@v4
+      - name: Validate release tag
+        run: |
+          if [[ "$GITHUB_REF_TYPE" != tag || ! "$GITHUB_REF_NAME" =~ ^[1-9][0-9]*\.0$ ]]; then
+            echo "Dispatch this workflow with a release tag such as 1.0, 2.0, or 3.0." >&2
+            exit 1
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -32,7 +38,7 @@ jobs:
         working-directory: .
         run: node --test commands/deploy.test.mjs
       - name: Configure GitHub Pages
-        if: startsWith(github.ref, 'refs/tags/deploy-')
+        if: github.ref_type == 'tag'
         id: pages
         uses: actions/configure-pages@v5
       - name: Build app
@@ -46,13 +52,13 @@ jobs:
           path: Forme/dist
           if-no-files-found: error
       - name: Upload GitHub Pages build
-        if: startsWith(github.ref, 'refs/tags/deploy-')
+        if: github.ref_type == 'tag'
         uses: actions/upload-pages-artifact@v3
         with:
           path: Forme/dist
 
   deploy:
-    if: startsWith(github.ref, 'refs/tags/deploy-')
+    if: github.ref_type == 'tag'
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -70,7 +76,7 @@ jobs:
         uses: actions/deploy-pages@v4
 
   release:
-    if: startsWith(github.ref, 'refs/tags/deploy-')
+    if: github.ref_type == 'tag'
     needs: deploy
     runs-on: ubuntu-latest
     permissions:

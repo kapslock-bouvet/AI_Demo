@@ -81,8 +81,8 @@ test('tags remote main, then dispatches that tag without deploying local changes
   const result = runDeploy();
   assert.equal(result.status, 0, result.stderr);
   const output = result.stdout;
-  const tag = output.match(/Created and pushed tag: (deploy-\d{8}-\d{6}-[a-f0-9]+)/)?.[1];
-  assert.ok(tag, output);
+  const tag = output.match(/Created and pushed tag: ([1-9][0-9]*\.0)/)?.[1];
+  assert.equal(tag, '1.0', output);
   assert.equal(git('cat-file', '-t', `refs/tags/${tag}`), 'tag');
   assert.equal(git('rev-parse', `${tag}^{commit}`), main);
   assert.match(git('ls-remote', 'origin', `refs/tags/${tag}^{}`), new RegExp(`^${main}\\s`));
@@ -93,6 +93,31 @@ test('tags remote main, then dispatches that tag without deploying local changes
     'workflow', 'run', 'react.yml', '--ref', tag,
   ]);
   assert.match(output, /Dispatched workflow: react\.yml/);
+});
+
+test('increments successive deployments as 1.0, 2.0, and 3.0', (t) => {
+  const { runDeploy, git } = repository(t);
+
+  for (const tag of ['1.0', '2.0', '3.0']) {
+    const result = runDeploy();
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok(result.stdout.includes(`Created and pushed tag: ${tag}\n`));
+    assert.match(git('ls-remote', '--tags', 'origin', `refs/tags/${tag}`), /refs\/tags\//);
+  }
+});
+
+test('increments the highest numeric remote version and ignores other tags', (t) => {
+  const { runDeploy, git } = repository(t);
+  for (const tag of ['2.0', '9.0', '10.0', 'deploy-old', 'v99.0', '01.0', '0.0', '99.1']) {
+    git('tag', tag);
+    git('push', 'origin', `refs/tags/${tag}`);
+  }
+  git('tag', '999.0');
+
+  const result = runDeploy();
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Created and pushed tag: 11\.0\n/);
+  assert.equal(git('ls-remote', '--tags', 'origin', 'refs/tags/999.0'), '');
 });
 
 test('does not tag when origin/main is missing', (t) => {

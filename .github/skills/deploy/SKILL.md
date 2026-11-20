@@ -20,11 +20,15 @@ changes, push a branch, or change GitHub settings automatically.
 3. Fetch `origin/main` with `git fetch --no-tags origin refs/heads/main` and
    inspect `git show FETCH_HEAD:.github/workflows/react.yml`. Verify that this
    remote workflow supports `workflow_dispatch` with no push or pull-request
-   triggers, deploys `deploy-*` tag refs to Pages, and
+   triggers, validates positive integer release tags such as `1.0`, `2.0`, and
+   `3.0`, deploys those tag refs to Pages, and
    publishes a release with generated notes only after deployment succeeds.
    If not, stop and ask the user to commit and push these command/workflow files
    to `main` first. Explain that this deploys the latest remote `origin/main`,
-   not the current branch or uncommitted changes.
+   not the current branch or uncommitted changes. The script starts at `1.0`
+   and increments the highest matching tag on `origin` by one major version.
+   It ignores timestamp tags and other tag formats. Existing tags are never
+   renamed or overwritten. The `github-pages` environment must allow `*.0` tags.
    Run `bash commands/deploy.sh` exactly once.
    If it fails, stop and report the error; do not create another tag or force-push.
 4. Use the tag printed by the script to find its Actions run:

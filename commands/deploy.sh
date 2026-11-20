@@ -13,6 +13,11 @@ if ! command -v gh >/dev/null; then
   exit 1
 fi
 
+if ! command -v node >/dev/null; then
+  echo "Node.js is required to calculate the next deployment version." >&2
+  exit 1
+fi
+
 if ! gh auth status; then
   echo "Authenticate GitHub CLI with gh auth login before deploying." >&2
   exit 1
@@ -29,8 +34,19 @@ if ! git cat-file -e "$commit:.github/workflows/react.yml"; then
   exit 1
 fi
 
-short_commit="$(git rev-parse --short=12 "$commit")"
-tag="deploy-$(date -u +%Y%m%d-%H%M%S)-$short_commit"
+tag="$(git ls-remote --tags --refs origin | node --input-type=module -e '
+import { readFileSync } from "node:fs";
+
+let latest = 0n;
+for (const line of readFileSync(0, "utf8").split("\n")) {
+  const match = line.match(/\trefs\/tags\/([1-9][0-9]*)\.0$/);
+  if (match) {
+    const major = BigInt(match[1]);
+    if (major > latest) latest = major;
+  }
+}
+console.log(`${latest + 1n}.0`);
+')"
 
 git tag -a "$tag" "$commit" -m "Deploy $commit from origin/main"
 
